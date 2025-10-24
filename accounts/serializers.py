@@ -1,6 +1,8 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from django.contrib.auth import authenticate
 
 User = get_user_model()
 
@@ -45,3 +47,43 @@ class RegisterSerializer(serializers.ModelSerializer):
         user.save()
 
         return user
+    
+
+class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
+    
+    username_field = 'email'
+
+    def validate(self, attrs):
+        
+        email = attrs.get("email")
+        password = attrs.get("password")
+
+        
+        if not email or not password:
+            raise serializers.ValidationError("Both email and password are required.")
+
+        
+        
+        user = authenticate(email=email, password=password)
+
+        if not user:
+            raise serializers.ValidationError("Invalid email or password.")
+
+        if not user.is_active:
+            raise serializers.ValidationError("This account is inactive.")
+
+        
+        data = super().validate(attrs)
+        data.update({
+            "email": user.email,
+            "full_name": getattr(user, "full_name", ""),
+            "role": getattr(user, "role", ""),
+        })
+        return data
+
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+        token["email"] = user.email
+        token["role"] = getattr(user, "role", "")
+        return token
